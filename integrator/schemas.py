@@ -18,7 +18,7 @@ class ERPProduct(BaseModel):
 
     id: str
     title: str
-    price_vat_excl: float = None
+    price_vat_excl: float
     stocks: dict[str, Any] = Field(default_factory=dict)
     attributes: dict[str, Any] | None = None
 

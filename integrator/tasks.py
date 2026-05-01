@@ -18,7 +18,7 @@ from integrator.schemas import ERPProduct, EshopProduct
 logger = logging.getLogger(__name__)
 
 ESHOP_BASE_URL = getattr(settings, "ESHOP_API_BASE_URL", "https://api.fake-eshop.cz/v1")
-ESHOP_API_KEY = getattr(settings, "ESHOP_API_KEY", "symma-secret-token")
+ESHOP_API_KEY = getattr(settings, "ESHOP_API_KEY", "symma-secret-token") # Again, the api key should not be hardcoded here
 RATE_LIMIT = getattr(settings, "ESHOP_API_RATE_LIMIT", 5)
 MOCK_ESHOP = getattr(settings, "MOCK_ESHOP", False)
 

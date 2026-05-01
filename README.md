@@ -92,10 +92,10 @@ docker-compose exec web pytest -v
 - Since e-shop could be unavailable, all data is always stored in the database (see `payload` field in `SyncedProduct`), unsuccessful syncs are marked as `FAILED` and processed on the next sync
 - Edge case: If a product is removed from ERP without being previously sent to e-shop in previous syncs, it still gets sent to e-shop as an archived product (`active=False` in the payload)
 - The logged stats (created, updated, unchanged, deactivated, failed) always represent the DB -> e-shop synchronization status
-
+- Hashing includes the `active` field, so that previously inactive products can be re-activated without additional branching of the sync logic
 
 ### Database model (`models/SyncedProduct`)
-- `status` is either `PENDING` (loaded from ERP to DB, not yet sent to e-shop), `SUCCESS` (sent to e-shop), `FAILED` (cannot contact e-shop, will be retried on next sync)
+- `status` always reflects the last synchronization with the e-shop, and is either `PENDING` (loaded from ERP to DB, not yet sent to e-shop), `SUCCESS` (sent to e-shop), `FAILED` (cannot contact e-shop, will be retried on next sync)
 - `synced_at` is timestamp of the last successful sync (successfully contacted e-shop)
 - `payload` field ALWAYS reflects the latest state of the product in the ERP system
 - `last_hash` is the SHA-256 hash of the last payload that was successfully sent to e-shop (therefore can differ from hash of the current payload)
