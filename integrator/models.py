@@ -18,6 +18,11 @@ class SyncedProduct(models.Model):
     synced_at = models.DateTimeField(
         null=True, blank=True, help_text="Timestamp of the last successful sync"
     )
+    fetched_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp of when the current payload was fetched from the ERP",
+    )
     status = models.CharField(
         max_length=10,
         choices=SyncStatus.choices,

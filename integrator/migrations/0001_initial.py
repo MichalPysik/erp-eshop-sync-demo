@@ -25,6 +25,7 @@ class Migration(migrations.Migration):
                 ("sku", models.CharField(db_index=True, max_length=64, unique=True)),
                 ("last_hash", models.CharField(blank=True, default="", max_length=64)),
                 ("synced_at", models.DateTimeField(blank=True, null=True)),
+                ("fetched_at", models.DateTimeField(blank=True, null=True)),
                 (
                     "status",
                     models.CharField(

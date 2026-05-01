@@ -97,6 +97,7 @@ docker-compose exec web pytest -v
 ### Database model (`models/SyncedProduct`)
 - `status` always reflects the last synchronization with the e-shop, and is either `PENDING` (loaded from ERP to DB, not yet sent to e-shop), `SUCCESS` (sent to e-shop), `FAILED` (cannot contact e-shop, will be retried on next sync)
 - `synced_at` is timestamp of the last successful sync (successfully contacted e-shop)
+- `fetched_at` is timestamp of the last successful load from ERP (when current payload field was generated)
 - `payload` field ALWAYS reflects the latest state of the product in the ERP system
 - `last_hash` is the SHA-256 hash of the last payload that was successfully sent to e-shop (therefore can differ from hash of the current payload)
 - `active` flag is `True`, until the product is marked as inactive in the ERP system AND the e-shop is successfully contacted about this event (as opposed to `active` flag inside the payload, which always reflects ERP).

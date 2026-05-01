@@ -18,7 +18,9 @@ from integrator.schemas import ERPProduct, EshopProduct
 logger = logging.getLogger(__name__)
 
 ESHOP_BASE_URL = getattr(settings, "ESHOP_API_BASE_URL", "https://api.fake-eshop.cz/v1")
-ESHOP_API_KEY = getattr(settings, "ESHOP_API_KEY", "symma-secret-token") # Again, the api key should not be hardcoded here
+ESHOP_API_KEY = getattr(
+    settings, "ESHOP_API_KEY", "symma-secret-token"
+)  # Again, the api key should not be hardcoded here
 RATE_LIMIT = getattr(settings, "ESHOP_API_RATE_LIMIT", 5)
 MOCK_ESHOP = getattr(settings, "MOCK_ESHOP", False)
 
@@ -182,6 +184,7 @@ def sync_products(erp_path: str | None = None) -> dict:
             active=False,
         )
         db_prod.payload = deactivation_product.api_payload()
+        db_prod.fetched_at = timezone.now()
         db_prod.save()
         limiter.wait()
         try:
@@ -218,7 +221,7 @@ def sync_products(erp_path: str | None = None) -> dict:
                 "last_hash": "",
                 "status": SyncStatus.PENDING,
                 "active": True,
-                "payload": product.api_payload(),
+                "payload": {},
             },
         )
 
@@ -234,6 +237,7 @@ def sync_products(erp_path: str | None = None) -> dict:
         db_prod.status = SyncStatus.PENDING
         db_prod.active = True
         db_prod.payload = product.api_payload()
+        db_prod.fetched_at = timezone.now()
         db_prod.save()
 
         exists_in_eshop = not created and db_prod.last_hash != ""
