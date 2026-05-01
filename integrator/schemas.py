@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
 from django.conf import settings
+from pydantic import BaseModel, Field, field_validator
 
 VAT_PERCENT = getattr(settings, "VAT_PERCENT", False)
 VAT_MULTIPLIER = 1.0 + (VAT_PERCENT / 100.0)
+
 
 class ERPProduct(BaseModel):
     """Raw product as it comes from erp_data.json – used for validation only."""

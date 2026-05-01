@@ -81,8 +81,8 @@ docker-compose exec web pytest -v
 
 ## Additional Configuration/settings (core/settings.py)
 - Variables for communicating with the e-shop and ERP (base url, api key, rate limit, ERP input file)
-- MOCK_ESHOP (bool) - Setting this to True will replace e-shop communication with hardcoded HTTP 200/201 responses and log the payload - good for manual testing with real database.
-- VAT PERCENT (float) - VAT percentage to be added to the price (configurable since it can depend on country).
+- `MOCK_ESHOP` (`bool`) - Setting this to True will replace e-shop communication with hardcoded HTTP 200/201 responses and log the payload - good for manual testing with real database.
+- `VAT PERCENT` (`float`) - VAT percentage to be added to the price (configurable since it can depend on country).
 
 
 ## Important notes and decisions made

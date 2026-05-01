@@ -8,13 +8,8 @@ import responses
 
 from integrator.models import SyncedProduct, SyncStatus
 from integrator.schemas import ERPProduct, EshopProduct
-from integrator.tasks import (
-    load_erp_data,
-    parse_and_validate,
-    send_to_eshop,
-    sync_products,
-    ESHOP_BASE_URL,
-)
+from integrator.tasks import (ESHOP_BASE_URL, load_erp_data,
+                              parse_and_validate, send_to_eshop, sync_products)
 
 pytestmark = pytest.mark.django_db
 
@@ -24,6 +19,7 @@ PRODUCTS_URL = f"{ESHOP_BASE_URL}/products/"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_erp_file(data: list[dict]) -> str:
     f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
@@ -37,12 +33,26 @@ def _mock_eshop_post(status=201):
 
 
 def _mock_eshop_patch(sku, status=200):
-    responses.add(responses.PATCH, f"{PRODUCTS_URL}{sku}/", json={"ok": True}, status=status)
+    responses.add(
+        responses.PATCH, f"{PRODUCTS_URL}{sku}/", json={"ok": True}, status=status
+    )
 
 
 VALID_ERP = [
-    {"id": "SKU-001", "title": "Kávovar", "price_vat_excl": 12400.5, "stocks": {"a": 5, "b": 3}, "attributes": {"color": "stříbrná"}},
-    {"id": "SKU-003", "title": "Mlýnek", "price_vat_excl": 1500, "stocks": {"x": 50}, "attributes": None},
+    {
+        "id": "SKU-001",
+        "title": "Kávovar",
+        "price_vat_excl": 12400.5,
+        "stocks": {"a": 5, "b": 3},
+        "attributes": {"color": "stříbrná"},
+    },
+    {
+        "id": "SKU-003",
+        "title": "Mlýnek",
+        "price_vat_excl": 1500,
+        "stocks": {"x": 50},
+        "attributes": None,
+    },
 ]
 
 
@@ -50,19 +60,54 @@ VALID_ERP = [
 # parse_and_validate
 # ---------------------------------------------------------------------------
 
+
 class TestParseAndValidate:
     def test_skips_negative_price(self):
-        data = [{"id": "BAD", "title": "X", "price_vat_excl": -10, "stocks": {}, "attributes": {}}]
+        data = [
+            {
+                "id": "BAD",
+                "title": "X",
+                "price_vat_excl": -10,
+                "stocks": {},
+                "attributes": {},
+            }
+        ]
         assert parse_and_validate(data) == []
 
     def test_skips_null_price(self):
-        data = [{"id": "X", "title": "X", "price_vat_excl": None, "stocks": {}, "attributes": {}}]
+        data = [
+            {
+                "id": "X",
+                "title": "X",
+                "price_vat_excl": None,
+                "stocks": {},
+                "attributes": {},
+            }
+        ]
         assert parse_and_validate(data) == []
 
     def test_uses_last_duplicate(self):
-        item_a = {"id": "SKU-006", "title": "Tablety", "price_vat_excl": 250, "stocks": {"a": 100}, "attributes": {}}
-        item_b = {"id": "SKU-006", "title": "Lepsi_Tablety", "price_vat_excl": 250, "stocks": {"a": 100}, "attributes": {}}
-        item_c = {"id": "SKU-006", "title": "Nejlepsi_Tablety", "price_vat_excl": 260, "stocks": {"a": 100},"attributes": {}}
+        item_a = {
+            "id": "SKU-006",
+            "title": "Tablety",
+            "price_vat_excl": 250,
+            "stocks": {"a": 100},
+            "attributes": {},
+        }
+        item_b = {
+            "id": "SKU-006",
+            "title": "Lepsi_Tablety",
+            "price_vat_excl": 250,
+            "stocks": {"a": 100},
+            "attributes": {},
+        }
+        item_c = {
+            "id": "SKU-006",
+            "title": "Nejlepsi_Tablety",
+            "price_vat_excl": 260,
+            "stocks": {"a": 100},
+            "attributes": {},
+        }
         result = parse_and_validate([item_a, item_b, item_c])
         assert len(result) == 1
         assert result[0].id == "SKU-006"
@@ -77,6 +122,7 @@ class TestParseAndValidate:
 # ---------------------------------------------------------------------------
 # Full sync task (with mocked API)
 # ---------------------------------------------------------------------------
+
 
 class TestSyncProducts:
     @responses.activate
@@ -177,6 +223,7 @@ class TestSyncProducts:
 # 429 rate-limit retry
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimitRetry:
     @responses.activate
     def test_429_retry_then_success(self):
@@ -209,7 +256,9 @@ class TestRateLimitRetry:
     def test_patch_uses_correct_url(self):
         erp = ERPProduct(id="SKU-001", title="T", price_vat_excl=100, stocks={"a": 1})
         product = EshopProduct.from_erp(erp)
-        responses.add(responses.PATCH, f"{PRODUCTS_URL}SKU-001/", json={"ok": True}, status=200)
+        responses.add(
+            responses.PATCH, f"{PRODUCTS_URL}SKU-001/", json={"ok": True}, status=200
+        )
 
         resp = send_to_eshop(product, exists_in_eshop=True)
         assert resp.status_code == 200
@@ -220,9 +269,18 @@ class TestRateLimitRetry:
 # load_erp_data
 # ---------------------------------------------------------------------------
 
+
 class TestLoadErpData:
     def test_loads_json_file(self):
-        data = [{"id": "X", "title": "Y", "price_vat_excl": 1, "stocks": {}, "attributes": {}}]
+        data = [
+            {
+                "id": "X",
+                "title": "Y",
+                "price_vat_excl": 1,
+                "stocks": {},
+                "attributes": {},
+            }
+        ]
         path = _write_erp_file(data)
         loaded = load_erp_data(path)
         assert loaded == data

@@ -30,6 +30,7 @@ RETRY_BACKOFF = 1.0  # seconds to wait after first 429 (then exponential backoff
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def load_erp_data(path: str | None = None) -> list[dict[str, Any]]:
     """Read erp_data.json from disk."""
     path = path or str(settings.ERP_DATA_FILE)
@@ -50,15 +51,11 @@ def parse_and_validate(raw_items: list[dict]) -> list[ERPProduct]:
         try:
             erp = ERPProduct.model_validate(item)
         except Exception as exc:
-            logger.warning(
-                "Skipping invalid ERP item %s: %s",
-                item.get("id", "?"),
-                exc,
-            )
+            logger.warning(f"Skipping invalid ERP item {item.get('id', '?')}: {exc}")
             continue
 
         if erp.id in products:
-            logger.info("Replacing duplicate SKU %s", erp.id)
+            logger.info(f"Replacing duplicate SKU {erp.id}")
 
         products[erp.id] = erp
 
@@ -93,7 +90,9 @@ def send_to_eshop(product: EshopProduct, exists_in_eshop: bool) -> requests.Resp
         response = requests.Response()
         response.status_code = 200 if exists_in_eshop else 201
         response._content = b'{"ok": true}'
-        logger.info(f"Mock Eshop received product for {'creation' if not exists_in_eshop else 'update'}: {product}")
+        logger.info(
+            f"Mock Eshop received product for {'creation' if not exists_in_eshop else 'update'}: {product}"
+        )
         return response
 
     for attempt in range(1, MAX_RETRIES_429 + 1):
@@ -106,7 +105,9 @@ def send_to_eshop(product: EshopProduct, exists_in_eshop: bool) -> requests.Resp
         )
         if resp.status_code == 429:
             wait = RETRY_BACKOFF * attempt
-            logger.warning("429 rate-limited on %s (attempt %d), sleeping %.1fs", product.sku, attempt, wait)
+            logger.warning(
+                f"429 rate-limited on {product.sku} (attempt {attempt}), sleeping {wait:.1f}s"
+            )
             time.sleep(wait)
             continue
         return resp
@@ -118,6 +119,7 @@ def send_to_eshop(product: EshopProduct, exists_in_eshop: bool) -> requests.Resp
 # ---------------------------------------------------------------------------
 # Rate-limiter (token-bucket style, simple)
 # ---------------------------------------------------------------------------
+
 
 class RateLimiter:
     """Simple token-bucket rate limiter: max `rate` calls per second."""
@@ -144,6 +146,7 @@ class RateLimiter:
 # ---------------------------------------------------------------------------
 # Main Celery task
 # ---------------------------------------------------------------------------
+
 
 @shared_task(name="integrator.sync_products")
 def sync_products(erp_path: str | None = None) -> dict:
@@ -184,7 +187,9 @@ def sync_products(erp_path: str | None = None) -> dict:
         try:
             # Edge case: if db_prod.last_hash == "", we send archived (inactive) product to Eshop,
             # which encountered eshop communication error when it was about to get created there
-            resp = send_to_eshop(deactivation_product, exists_in_eshop=(db_prod.last_hash != ""))
+            resp = send_to_eshop(
+                deactivation_product, exists_in_eshop=(db_prod.last_hash != "")
+            )
             if resp.status_code in (200, 201, 202, 204):
                 db_prod.active = False
                 db_prod.status = SyncStatus.SUCCESS
@@ -196,12 +201,12 @@ def sync_products(erp_path: str | None = None) -> dict:
                 db_prod.status = SyncStatus.FAILED
                 db_prod.save()
                 stats["failed"] += 1
-                logger.error("Failed to deactivate %s: %s", db_prod.sku, resp.status_code)
+                logger.error(f"Failed to deactivate {db_prod.sku}: {resp.status_code}")
         except Exception as exc:
             db_prod.status = SyncStatus.FAILED
             db_prod.save()
             stats["failed"] += 1
-            logger.exception("Error deactivating %s: %s", db_prod.sku, exc)
+            logger.exception(f"Error deactivating {db_prod.sku}: {exc}")
 
     # 3. Upsert active products (delta sync)
     for product in eshop_products:
@@ -217,7 +222,11 @@ def sync_products(erp_path: str | None = None) -> dict:
             },
         )
 
-        if not created and db_prod.last_hash == new_hash and db_prod.status == SyncStatus.SUCCESS:
+        if (
+            not created
+            and db_prod.last_hash == new_hash
+            and db_prod.status == SyncStatus.SUCCESS
+        ):
             stats["unchanged"] += 1
             continue
 
@@ -242,12 +251,14 @@ def sync_products(erp_path: str | None = None) -> dict:
                 db_prod.status = SyncStatus.FAILED
                 db_prod.save()
                 stats["failed"] += 1
-                logger.error("E-shop API error for %s: HTTP %s – %s", product.sku, resp.status_code, resp.text)
+                logger.error(
+                    f"E-shop API error for {product.sku}: HTTP {resp.status_code} – {resp.text}"
+                )
         except Exception as exc:
             db_prod.status = SyncStatus.FAILED
             db_prod.save()
             stats["failed"] += 1
-            logger.exception("Error for %s: %s", product.sku, exc)
+            logger.exception(f"Error for {product.sku}: {exc}")
 
-    logger.info("=== sync_products END === stats=%s", stats)
+    logger.info(f"=== sync_products END === stats={stats}")
     return stats
