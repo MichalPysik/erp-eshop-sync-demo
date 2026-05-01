@@ -105,14 +105,22 @@ def send_to_eshop(product: EshopProduct, exists_in_eshop: bool) -> requests.Resp
             headers=_api_headers(),
             timeout=10,
         )
-        if resp.status_code == 429:
+        if resp.status_code != 429:
+            return resp
+
+        retry_after = resp.headers.get("Retry-After")
+        if retry_after is not None:
+            try:
+                wait = float(retry_after)
+            except ValueError:
+                wait = RETRY_BACKOFF * attempt
+        else:
             wait = RETRY_BACKOFF * attempt
-            logger.warning(
-                f"429 rate-limited on {product.sku} (attempt {attempt}), sleeping {wait:.1f}s"
-            )
+        logger.warning(
+            f"429 rate-limited on {product.sku} (attempt {attempt}), sleeping {wait:.1f}s"
+        )
+        if attempt < MAX_RETRIES_429:
             time.sleep(wait)
-            continue
-        return resp
 
     # All retries exhausted – return last response
     return resp
