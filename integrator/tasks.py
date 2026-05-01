@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 ESHOP_BASE_URL = getattr(settings, "ESHOP_API_BASE_URL", "https://api.fake-eshop.cz/v1")
 ESHOP_API_KEY = getattr(settings, "ESHOP_API_KEY", "symma-secret-token")
 RATE_LIMIT = getattr(settings, "ESHOP_API_RATE_LIMIT", 5)
+MOCK_ESHOP = getattr(settings, "MOCK_ESHOP", False)
 
 MAX_RETRIES_429 = 5
-RETRY_BACKOFF = 1.0  # seconds to wait after a 429
+RETRY_BACKOFF = 1.0  # seconds to wait after first 429 (then exponential backoff)
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +88,14 @@ def send_to_eshop(product: EshopProduct, exists_in_eshop: bool) -> requests.Resp
 
     method = "PATCH" if exists_in_eshop else "POST"
 
+    # Mocked responses for easier manual testing
+    if MOCK_ESHOP:
+        response = requests.Response()
+        response.status_code = 200 if exists_in_eshop else 201
+        response._content = b'{"ok": true}'
+        logger.info(f"Mock Eshop received product for {'creation' if not exists_in_eshop else 'update'}: {product}")
+        return response
+
     for attempt in range(1, MAX_RETRIES_429 + 1):
         resp = requests.request(
             method,
@@ -103,7 +112,7 @@ def send_to_eshop(product: EshopProduct, exists_in_eshop: bool) -> requests.Resp
         return resp
 
     # All retries exhausted – return last response
-    return resp  # type: ignore[possibly-undefined]
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -160,23 +169,27 @@ def sync_products(erp_path: str | None = None) -> dict:
     # 2. Mark products no longer in ERP as inactive
     disappeared = SyncedProduct.objects.filter(active=True).exclude(sku__in=erp_skus)
     for db_prod in disappeared:
+        stored = db_prod.payload or {}
         deactivation_product = EshopProduct(
             sku=db_prod.sku,
-            title=db_prod.payload.get("title", "Unknown") if db_prod.payload else "Unknown",
-            price_vat_incl=db_prod.payload.get("price_vat_incl", 0) if db_prod.payload else 0,
-            stock_total=db_prod.payload.get("stock_total", 0) if db_prod.payload else 0,
-            color=db_prod.payload.get("color", "N/A") if db_prod.payload else "N/A",
+            title=stored.get("title", "Unknown"),
+            price_vat_incl=stored.get("price_vat_incl", 0),
+            stock_total=stored.get("stock_total", 0),
+            attributes=stored.get("attributes", {"color": "N/A"}),
             active=False,
         )
+        db_prod.payload = deactivation_product.api_payload()
+        db_prod.save()
         limiter.wait()
         try:
-            resp = send_to_eshop(deactivation_product, exists_in_eshop=True)
+            # Edge case: if db_prod.last_hash == "", we send archived (inactive) product to Eshop,
+            # which encountered eshop communication error when it was about to get created there
+            resp = send_to_eshop(deactivation_product, exists_in_eshop=(db_prod.last_hash != ""))
             if resp.status_code in (200, 201, 202, 204):
                 db_prod.active = False
                 db_prod.status = SyncStatus.SUCCESS
                 db_prod.synced_at = timezone.now()
                 db_prod.last_hash = deactivation_product.compute_hash()
-                db_prod.payload = deactivation_product.api_payload()
                 db_prod.save()
                 stats["deactivated"] += 1
             else:

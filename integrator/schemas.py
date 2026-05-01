@@ -7,7 +7,10 @@ import json
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
+from django.conf import settings
 
+VAT_PERCENT = getattr(settings, "VAT_PERCENT", False)
+VAT_MULTIPLIER = 1.0 + (VAT_PERCENT / 100.0)
 
 class ERPProduct(BaseModel):
     """Raw product as it comes from erp_data.json – used for validation only."""
@@ -20,7 +23,7 @@ class ERPProduct(BaseModel):
 
     @field_validator("price_vat_excl")
     @classmethod
-    def price_must_be_positive(cls, v: float) -> float:
+    def price_must_be_non_negative(cls, v: float) -> float:
         if v < 0:
             raise ValueError("price_vat_excl must be non-negative")
         return v
@@ -33,32 +36,34 @@ class EshopProduct(BaseModel):
     title: str
     price_vat_incl: float
     stock_total: int
-    color: str
+    attributes: dict[str, Any] = Field(default_factory=dict)
     active: bool = True
 
     @classmethod
     def from_erp(cls, erp: ERPProduct, active: bool = True) -> "EshopProduct":
-        price_vat_incl = round(erp.price_vat_excl * 1.21, 2)
+        price_vat_incl = round(erp.price_vat_excl * VAT_MULTIPLIER, 2)
 
         stock_total = 0
         for val in erp.stocks.values():
             if isinstance(val, (int, float)):
                 stock_total += int(val)
 
-        attrs = erp.attributes or {}
-        color = attrs.get("color", "N/A") or "N/A"
+        raw_attrs = erp.attributes or {}
+        # Carry all attributes through; ensure color always has a value
+        attrs: dict[str, Any] = {**raw_attrs}
+        attrs["color"] = attrs.get("color") or "N/A"
 
         return cls(
             sku=erp.id,
             title=erp.title,
             price_vat_incl=price_vat_incl,
             stock_total=stock_total,
-            color=color,
+            attributes=attrs,
             active=active,
         )
 
     def compute_hash(self) -> str:
-        """Deterministic hash of the payload for delta-sync comparison."""
+        """Deterministic hash of the payload for delta-sync comparison (includes `active` field)."""
         payload = self.model_dump(mode="json")
         raw = json.dumps(payload, sort_keys=True)
         return hashlib.sha256(raw.encode()).hexdigest()

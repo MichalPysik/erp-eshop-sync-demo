@@ -7,3 +7,6 @@ DATABASES = {
         "NAME": ":memory:",
     }
 }
+
+# Never mock the e-shop in tests – use responses library for HTTP mocking instead
+MOCK_ESHOP = False

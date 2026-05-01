@@ -126,12 +126,13 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Celery
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
 # ERP / E-shop sync settings
 ERP_DATA_FILE = BASE_DIR / 'erp_data.json'
 ESHOP_API_BASE_URL = 'https://api.fake-eshop.cz/v1'
-ESHOP_API_KEY = 'symma-secret-token'
+ESHOP_API_KEY = 'symma-secret-token' # Should be in secrets!
 ESHOP_API_RATE_LIMIT = 5  # requests per second
+MOCK_ESHOP = False # Setting this to True will skip sending data to the e-shop (auto-success) - Good for manual testing with real DB, etc.
+
+# VAT calculations
+VAT_PERCENT = 21.0 # CZ (This can depend on country, so it's configurable)

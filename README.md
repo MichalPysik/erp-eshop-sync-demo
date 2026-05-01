@@ -51,17 +51,14 @@ A robust synchronization bridge between an ERP system and a fictional e-shop API
 
 ```bash
 # Build and start all services
-docker-compose up --build -d
+docker-compose up --build
 
 # Run migrations
 docker-compose exec web python manage.py migrate
 
 # Trigger a sync manually (from Django shell)
-docker-compose exec web python manage.py shell -c "
-from integrator.tasks import sync_products
-result = sync_products.delay()
-print(result.get(timeout=30))
-"
+docker-compose exec web python manage.py shell -c \
+"from integrator.tasks import sync_products; sync_products.delay()"
 ```
 
 ### Running Tests
@@ -71,32 +68,40 @@ Tests use an in-memory SQLite database and mocked HTTP responses — no external
 ```bash
 # Inside Docker
 docker-compose exec web pytest -v
-
-# Or locally with a virtualenv
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pytest -v
 ```
 
-### Configuration
-
-| Environment Variable | Default | Description |
-|---|---|---|
-| `CELERY_BROKER_URL` | `redis://redis:6379/0` | Redis URL for Celery broker |
-| `DATABASE_URL` | (see `settings.py`) | PostgreSQL connection |
-
-Settings in `core/settings.py`:
-
-| Setting | Value | Description |
-|---|---|---|
-| `ESHOP_API_BASE_URL` | `https://api.fake-eshop.cz/v1` | Target e-shop API base URL |
-| `ESHOP_API_KEY` | `symma-secret-token` | API authentication key |
-| `ESHOP_API_RATE_LIMIT` | `5` | Max requests per second |
 
 ## Test Coverage
 
 - **Transformation logic**: VAT calculation, stock summation (including non-numeric values), color defaults, active flag, hash determinism.
-- **Validation**: Negative price rejection, null price skipping, duplicate deduplication.
+- **Validation**: Negative price rejection, null price skipping, duplicate deduplication for the same SKU (last valid product wins).
 - **API mocking**: Full sync cycle (POST for new, PATCH for updates), delta sync detection, deactivation on product removal, failure status tracking, retry of failed products.
 - **Rate limiting**: 429 retry with back-off, retry exhaustion, correct URL routing (POST vs PATCH).
+
+
+## Additional Configuration/settings (core/settings.py)
+- Variables for communicating with the e-shop and ERP (base url, api key, rate limit, ERP input file)
+- MOCK_ESHOP (bool) - Setting this to True will replace e-shop communication with hardcoded HTTP 200/201 responses and log the payload - good for manual testing with real database.
+- VAT PERCENT (float) - VAT percentage to be added to the price (configurable since it can depend on country).
+
+
+## Important notes and decisions made
+
+### Delta sync logic and edge cases
+- Since no DELETE method was specified, products no longer present in ERP are marked as inactive in both the database and the payload sent to e-shop (via PATCH or even CREATE, see `active` field in `EshopProduct`)
+- Since e-shop could be unavailable, all data is always stored in the database (see `payload` field in `SyncedProduct`), unsuccessful syncs are marked as `FAILED` and processed on the next sync
+- Edge case: If a product is removed from ERP without being previously sent to e-shop in previous syncs, it still gets sent to e-shop as an archived product (`active=False` in the payload)
+- The logged stats (created, updated, unchanged, deactivated, failed) always represent the DB -> e-shop synchronization status
+
+
+### Database model (`models/SyncedProduct`)
+- `status` is either `PENDING` (loaded from ERP to DB, not yet sent to e-shop), `SUCCESS` (sent to e-shop), `FAILED` (cannot contact e-shop, will be retried on next sync)
+- `synced_at` is timestamp of the last successful sync (successfully contacted e-shop)
+- `payload` field ALWAYS reflects the latest state of the product in the ERP system
+- `last_hash` is the SHA-256 hash of the last payload that was successfully sent to e-shop (therefore can differ from hash of the current payload)
+- `active` flag is `True`, until the product is marked as inactive in the ERP system AND the e-shop is successfully contacted about this event (as opposed to `active` flag inside the payload, which always reflects ERP).
+
+
+### Other notes
+- `ESHOP_API_KEY` should not be hardcoded anywhere in code, but rather read from some secret management system (keyvault)
+- The task can currently only be triggered manually, usually Celery Beat would be used to run it periodically

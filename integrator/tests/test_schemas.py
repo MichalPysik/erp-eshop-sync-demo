@@ -62,17 +62,17 @@ class TestEshopProductTransformation:
     def test_color_default_when_missing(self):
         erp = ERPProduct(id="SKU-006", title="Tablety", price_vat_excl=250, attributes={})
         eshop = EshopProduct.from_erp(erp)
-        assert eshop.color == "N/A"
+        assert eshop.attributes["color"] == "N/A"
 
     def test_color_default_when_null_attributes(self):
         erp = ERPProduct(id="SKU-003", title="Mlýnek", price_vat_excl=1500, attributes=None)
         eshop = EshopProduct.from_erp(erp)
-        assert eshop.color == "N/A"
+        assert eshop.attributes["color"] == "N/A"
 
     def test_color_preserved_when_present(self):
         erp = ERPProduct(id="SKU-001", title="Kávovar", price_vat_excl=100, attributes={"color": "stříbrná"})
         eshop = EshopProduct.from_erp(erp)
-        assert eshop.color == "stříbrná"
+        assert eshop.attributes["color"] == "stříbrná"
 
     def test_active_flag_default_true(self):
         erp = ERPProduct(id="X", title="X", price_vat_excl=10, stocks={})
@@ -98,6 +98,15 @@ class TestEshopProductTransformation:
     def test_api_payload_contains_all_fields(self):
         erp = ERPProduct(id="SKU-001", title="T", price_vat_excl=100, stocks={"a": 2}, attributes={"color": "red"})
         payload = EshopProduct.from_erp(erp).api_payload()
-        assert set(payload.keys()) == {"sku", "title", "price_vat_incl", "stock_total", "color", "active"}
+        assert set(payload.keys()) == {"sku", "title", "price_vat_incl", "stock_total", "attributes", "active"}
         assert payload["sku"] == "SKU-001"
         assert payload["active"] is True
+        assert payload["attributes"]["color"] == "red"
+
+    def test_extra_attributes_passed_through(self):
+        erp = ERPProduct(id="SKU-001", title="T", price_vat_excl=100, stocks={},
+                         attributes={"color": "red", "material": "steel", "weight": 1.5})
+        eshop = EshopProduct.from_erp(erp)
+        assert eshop.attributes["color"] == "red"
+        assert eshop.attributes["material"] == "steel"
+        assert eshop.attributes["weight"] == 1.5
